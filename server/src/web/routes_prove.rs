@@ -29,14 +29,15 @@ struct Argument {
 
 #[derive(Debug, Deserialize)]
 struct Manifest {
-    wasm_path: String,
+    wasm_path: Option<String>,
     elf_path: String,
-    elf_id: [u32; 8]
+    elf_id: [u32; 8],
 }
 
 #[derive(Debug, Deserialize)]
 struct ProvePayload {
     cid: String,
+    is_wasm: bool,
     arguments: Vec<Argument>,
 }
 
@@ -63,7 +64,7 @@ fn read_from_archive(content: &Vec<u8>, file_path: &str) -> Result<Vec<u8>, Box<
     Err("File not found in archive".into())
 }
 
-async fn read_from_ipfs(cid: String) -> Result<(Vec<u8>, Vec<u8>, [u32; 8]), Box<dyn Error>> {
+async fn read_from_ipfs(cid: &String) -> Result<Vec<u8>, Box<dyn Error>> {
     let base_url = "https://dweb.link/api/v0";
     let cid_url = format!("{}/cat/{}", base_url, cid);
     println!("Download file {:?}", &cid_url);
@@ -78,16 +79,7 @@ async fn read_from_ipfs(cid: String) -> Result<(Vec<u8>, Vec<u8>, [u32; 8]), Box
     let content = response.bytes().await.unwrap().to_vec();
     println!("Got file {:?}", &cid_url);
 
-    let manifest = read_from_archive(&content, "manifest.json").expect("Manifest should exists");
-    let manifest_json: Manifest =
-        serde_json::from_slice(&manifest).expect("Unable to parse manifest");
-    
-    let wasm_file = read_from_archive(&content, &manifest_json.wasm_path.replace("./", ""))
-        .expect("WASM file not found");
-    let elf_file = read_from_archive(&content, &manifest_json.elf_path.replace("./", ""))
-        .expect("ELF file not found");
-
-    Ok((wasm_file, elf_file, manifest_json.elf_id))
+    Ok(content)
 }
 
 pub fn routes() -> Router {
@@ -97,12 +89,26 @@ pub fn routes() -> Router {
 async fn api_prove(Json(payload): Json<ProvePayload>) -> AxumResult<Json<Value>> {
     println!("Run proof");
 
-    let (wasm_file, elf_file, elf_id) = read_from_ipfs(payload.cid).await.expect("msg");
+    let cid = payload.cid;
+    let content = read_from_ipfs(&cid).await.expect("msg");
+    let manifest_raw =
+        read_from_archive(&content, "manifest.json").expect("Manifest should exists");
+    let manifest: Manifest =
+        serde_json::from_slice(&manifest_raw).expect("Unable to parse manifest");
 
     let mut env_builder = ExecutorEnv::builder();
 
     // Add WASM
-    env_builder.add_input(&to_vec(&wasm_file).unwrap());
+    if payload.is_wasm && manifest.wasm_path.is_some() {
+        let wasm_file = read_from_archive(&content, &manifest.wasm_path.unwrap().replace("./", ""))
+            .expect("WASM file not found");
+
+        env_builder.add_input(&to_vec(&wasm_file).unwrap());
+    }
+
+    // Add ELF Binary
+    let elf_file = read_from_archive(&content, &manifest.elf_path.replace("./", ""))
+        .expect("ELF file not found");
 
     // Add params
     for arg in payload.arguments {
@@ -133,7 +139,7 @@ async fn api_prove(Json(payload): Json<ProvePayload>) -> AxumResult<Json<Value>>
 
     // Optional: Verify receipt to confirm that recipients will also be able to
     // verify your receipt
-    receipt.verify(elf_id).unwrap();
+    receipt.verify(manifest.elf_id).unwrap();
 
     let result: i32 = from_slice(&receipt.journal).unwrap();
     let receipt_data = bincode::serialize(&receipt).unwrap();
