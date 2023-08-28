@@ -1,24 +1,36 @@
-use axum::{extract::Json, routing::post, Router};
+use axum::{
+    extract::{Json, Path},
+    routing::{get, post},
+    Router,
+};
 use flate2::read::GzDecoder;
 use reqwest::{Client, StatusCode};
 use risc0_zkvm::{
     default_prover,
     serde::{from_slice, to_vec},
-    ExecutorEnv,
+    ExecutorEnv, ReceiptMetadata,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::io::Read;
 use std::{error::Error, result::Result};
+use std::{io::Read, time::Instant};
 use tar::Archive;
+use tokio::task;
 
-use crate::error::AxumResult;
+use crate::{error::AxumResult, web::session};
+
+use super::session::SessionRecord;
 
 #[derive(Debug, Deserialize)]
 enum DynType {
     Integer,
     Float,
     String,
+}
+impl DynType {
+    fn default() -> Self {
+        DynType::Integer
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,10 +47,51 @@ struct Manifest {
 }
 
 #[derive(Debug, Deserialize)]
-struct ProvePayload {
+struct ProofPayload {
     cid: String,
-    is_wasm: bool,
     arguments: Vec<Argument>,
+
+    #[serde(default = "bool::default")]
+    is_wasm: bool,
+
+    #[serde(default = "DynType::default")]
+    result_type: DynType,
+}
+
+pub fn routes() -> Router {
+    Router::new()
+        .route("/api/proof", post(api_proof_create))
+        .route("/api/proof/:id/status", get(api_proof_status))
+}
+
+async fn api_proof_status(Path(id): Path<String>) -> AxumResult<Json<Value>> {
+    let proof_session: SessionRecord = session::fetch(&id).await.expect("Proof Session not Found");
+
+    Ok(Json(json!(proof_session)))
+}
+
+async fn api_proof_create(Json(payload): Json<ProofPayload>) -> AxumResult<Json<Value>> {
+    // Create a session with Payload
+    let proof_session: SessionRecord = session::create()
+        .await
+        .expect("Unable to create the proof session");
+
+    // Start task in background
+    task::spawn(async {
+        // Proofs
+        match do_prove(payload).await {
+            Ok(_) => {
+                println!("Proof ran successfully");
+            }
+            Err(_) => {
+                println!("Failed to run proof");
+            }
+        };
+
+        // TODO: Update session data
+    });
+
+    Ok(Json(json!({ "session_id": proof_session.session_id })))
 }
 
 fn read_from_archive(content: &Vec<u8>, file_path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -82,13 +135,7 @@ async fn read_from_ipfs(cid: &String) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(content)
 }
 
-pub fn routes() -> Router {
-    Router::new().route("/api/prove", post(api_prove))
-}
-
-async fn api_prove(Json(payload): Json<ProvePayload>) -> AxumResult<Json<Value>> {
-    println!("Run proof");
-
+async fn do_prove(payload: ProofPayload) -> Result<(), Box<dyn Error>> {
     let cid = payload.cid;
     let content = read_from_ipfs(&cid).await.expect("msg");
     let manifest_raw =
@@ -132,24 +179,44 @@ async fn api_prove(Json(payload): Json<ProvePayload>) -> AxumResult<Json<Value>>
     // Obtain the default prover.
     let prover = default_prover();
 
+    let now = Instant::now();
+
     // Produce a receipt by proving the specified ELF binary.
     let receipt = prover.prove_elf(env, &elf_file).unwrap();
-    // TODO: Implement code for transmitting or serializing the receipt for
-    // other parties to verify here
-
-    // Optional: Verify receipt to confirm that recipients will also be able to
-    // verify your receipt
     receipt.verify(manifest.elf_id).unwrap();
 
-    let result: i32 = from_slice(&receipt.journal).unwrap();
-    let receipt_data = bincode::serialize(&receipt).unwrap();
+    // let program = Program::load_elf(&elf_file, MEM_SIZE as u32).unwrap();
+    // let image = MemoryImage::new(&program, PAGE_SIZE as u32).unwrap();
+    // let image_id = hex::encode(image.compute_id());
 
+    // let metadata: ReceiptMetadata = receipt.get_metadata().unwrap();
+
+    let result: Value = match payload.result_type {
+        DynType::Integer => {
+            let int_result: i32 = from_slice(&receipt.journal).unwrap();
+            int_result.into()
+        }
+        DynType::Float => {
+            let float_result: f32 = from_slice(&receipt.journal).unwrap();
+            float_result.into()
+        }
+        DynType::String => {
+            let string_result: String = from_slice(&receipt.journal).unwrap();
+            string_result.into()
+        }
+    };
+
+    // let receipt_data = bincode::serialize(&receipt).unwrap();
     println!("Receipt: {:?}", result);
 
-    let body = Json(json!({
-        "result": result,
-        "receipt": receipt_data
-    }));
+    // println!("Seal Bytes: {:?}", receipt.inner.flat());
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 
-    Ok(body)
+    // let body: Json<Value> = Json(json!({
+    //     "result": result,
+    //     "metadata": metadata
+    // }));
+
+    Ok(())
 }
