@@ -74,7 +74,7 @@ async fn main() {
 
     // run it with hyper on localhost:3000
     println!("Server running on port 3000");
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    axum::Server::bind(&"0.0.0.0:3005".parse().unwrap())
         .serve(router.into_make_service())
         .await
         .unwrap();

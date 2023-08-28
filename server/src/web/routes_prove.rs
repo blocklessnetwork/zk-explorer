@@ -8,7 +8,7 @@ use reqwest::{Client, StatusCode};
 use risc0_zkvm::{
     default_prover,
     serde::{from_slice, to_vec},
-    ExecutorEnv, ReceiptMetadata,
+    ExecutorEnv,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
