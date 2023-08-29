@@ -13,7 +13,7 @@ pub fn routes() -> Router {
 
 async fn api_upload_image(Json(payload): Json<ImagePayload>) -> AxumResult<Json<Value>> {
     Ok(Json(json!({
-      "success": true,
-      "payload": payload
+        "success": true,
+        "payload": payload
     })))
 }
