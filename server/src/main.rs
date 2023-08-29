@@ -1,57 +1,20 @@
-pub use self::error::{AxumResult, Error};
-use axum::{
-    routing::{get, get_service},
-    Router,
-};
-use std::env;
-use surrealdb::{
-    engine::remote::ws::{Client, Ws},
-    opt::auth::Root,
-    Surreal,
-};
-use tower_http::services::ServeDir;
+use crate::db::connect_db;
 
+pub use self::error::{AxumResult, Error};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+use std::env;
+
+mod db;
 mod error;
+mod services;
 mod web;
 
-pub static DB: Surreal<Client> = Surreal::init();
-
-async fn hello_world() -> &'static str {
+async fn api_handler_intro() -> &'static str {
     "Blockless ZK Playground."
 }
 
-fn routes_test() -> Router {
-    return Router::new().route("/", get(hello_world));
-}
-
-fn routes_static() -> Router {
-    return Router::new().nest_service("/", get_service(ServeDir::new("./")));
-}
-
-async fn connect_db(
-    db_uri: &str,
-    db_username: &str,
-    db_password: &str,
-    db_namespace: &str,
-) -> surrealdb::Result<()> {
-    // Connect to the server
-    DB.connect::<Ws>(db_uri).await.expect("Failed to connect");
-
-    DB.signin(Root {
-        username: &db_username,
-        password: &db_password,
-    })
-    .await
-    .expect("Failed to signin");
-
-    DB.use_ns(db_namespace)
-        .use_db(db_namespace)
-        .await
-        .expect("Failed to set namespace");
-
-    println!("Database connected at {}", db_uri);
-
-    Ok(())
+async fn api_handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "404 page not found.")
 }
 
 #[tokio::main]
@@ -61,20 +24,22 @@ async fn main() {
     let db_username = env::var("DB_USERNAME").unwrap();
     let db_password = env::var("DB_PASSWORD").unwrap();
     let db_namespace = env::var("DB_NAMESPACE").unwrap();
+    let web_host = env::var("WEB_HOST").unwrap();
 
     connect_db(&db_uri, &db_username, &db_password, &db_namespace)
         .await
         .expect("Had some errors running migrations :(");
 
-    // build our application with a single route
+    // Setup routes
     let router = Router::new()
-        .merge(routes_test())
+        .route("/", get(api_handler_intro))
         .merge(web::routes_prove::routes())
-        .fallback_service(routes_static());
+        .merge(web::routes_verify::routes())
+        .merge(web::routes_image::routes())
+        .fallback(api_handler_404);
 
-    // run it with hyper on localhost:3000
-    println!("Server running on port 3000");
-    axum::Server::bind(&"0.0.0.0:3005".parse().unwrap())
+    println!("Server running on port 3005");
+    axum::Server::bind(&web_host.parse().unwrap())
         .serve(router.into_make_service())
         .await
         .unwrap();

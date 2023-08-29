@@ -17,9 +17,7 @@ use std::{io::Read, time::Instant};
 use tar::Archive;
 use tokio::task;
 
-use crate::{error::AxumResult, web::session};
-
-use super::session::SessionRecord;
+use crate::{error::AxumResult, services::proof_session::{self, SessionRecord}};
 
 #[derive(Debug, Deserialize)]
 enum DynType {
@@ -65,14 +63,14 @@ pub fn routes() -> Router {
 }
 
 async fn api_proof_status(Path(id): Path<String>) -> AxumResult<Json<Value>> {
-    let proof_session: SessionRecord = session::fetch(&id).await.expect("Proof Session not Found");
+    let proof_session: SessionRecord = proof_session::fetch(&id).await.expect("Proof Session not Found");
 
     Ok(Json(json!(proof_session)))
 }
 
 async fn api_proof_create(Json(payload): Json<ProofPayload>) -> AxumResult<Json<Value>> {
     // Create a session with Payload
-    let proof_session: SessionRecord = session::create()
+    let proof_session: SessionRecord = proof_session::create()
         .await
         .expect("Unable to create the proof session");
 

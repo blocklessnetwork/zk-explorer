@@ -5,13 +5,13 @@ use serde_json::{json, Value};
 use crate::AxumResult;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct VerifyPayload {}
+struct ImagePayload {}
 
 pub fn routes() -> Router {
-    Router::new().route("/api/verify", post(api_verify))
+    Router::new().route("/api/image", post(api_upload_image))
 }
 
-async fn api_verify(Json(payload): Json<VerifyPayload>) -> AxumResult<Json<Value>> {
+async fn api_upload_image(Json(payload): Json<ImagePayload>) -> AxumResult<Json<Value>> {
     Ok(Json(json!({
       "success": true,
       "payload": payload

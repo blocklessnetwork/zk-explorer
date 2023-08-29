@@ -1,2 +1,3 @@
+pub(crate) mod routes_image;
 pub(crate) mod routes_prove;
-mod session;
+pub(crate) mod routes_verify;

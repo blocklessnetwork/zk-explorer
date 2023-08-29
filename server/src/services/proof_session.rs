@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use surrealdb::sql::Thing;
 use uuid::Uuid;
 
-use crate::DB;
+use crate::db::DB;
 
 const SESSION: &str = "session";
 
