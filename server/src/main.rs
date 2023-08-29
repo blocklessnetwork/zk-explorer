@@ -8,6 +8,7 @@ mod db;
 mod error;
 mod services;
 mod web;
+mod utils;
 
 async fn api_handler_intro() -> &'static str {
     "Blockless ZK Playground."

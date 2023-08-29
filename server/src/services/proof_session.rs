@@ -1,7 +1,5 @@
-use std::{error::Error, io::Read, time::Instant};
+use std::error::Error;
 
-use flate2::read::GzDecoder;
-use reqwest::{Client, StatusCode};
 use risc0_zkvm::{
     default_prover,
     serde::{from_slice, to_vec},
@@ -10,11 +8,16 @@ use risc0_zkvm::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use surrealdb::sql::{Datetime, Thing};
-use tar::Archive;
 use tokio::task;
 use uuid::Uuid;
 
-use crate::db::DB;
+use crate::{
+    db::DB,
+    utils::{
+        archive::read_from_archive,
+        ipfs::{download_from_ipfs, upload_to_ipfs},
+    },
+};
 
 const SESSION: &str = "session";
 
@@ -66,14 +69,15 @@ struct ProofSession<'a> {
 
     receipt_id: Option<&'a String>,
 
-    created_at: &'a Datetime,
-    completed_at: Option<&'a Datetime>,
+    created_at: Datetime,
+    completed_at: Datetime,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProofSessionCompleteRecord {
     status: ProofSessionStatus,
     completed_at: Datetime,
+    receipt_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,9 +89,10 @@ pub struct ProofSessionRecord {
 
     #[serde(default = "ProofSessionStatus::default")]
     pub status: ProofSessionStatus,
+    pub receipt_id: String,
 
     pub created_at: Datetime,
-    pub completed_at: Datetime
+    pub completed_at: Datetime,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,7 +118,7 @@ pub async fn list_by_image_id(
         .bind(("table", "session"))
         .bind(("image_id", image_id))
         .await
-        .expect("msg");
+        .expect("Failed to find proof sessions.");
 
     let records: Vec<ProofSessionRecord> = response.take(0).unwrap();
 
@@ -126,7 +131,7 @@ pub async fn fetch(id: &String) -> Result<ProofSessionRecord, Box<dyn Error>> {
         .bind(("table", "session"))
         .bind(("session_id", id))
         .await
-        .expect("msg");
+        .expect("Failed to find proof sessions.");
 
     let record: Option<ProofSessionRecord> = response.take(0).unwrap();
 
@@ -160,8 +165,8 @@ pub async fn create(
             arguments_type: &arguments_type,
             result_type: &result_type,
             arguments,
-            created_at: &Datetime::default(),
-            completed_at: None,
+            created_at: Datetime::default(),
+            completed_at: Datetime::default(),
         })
         .await
         .unwrap();
@@ -177,18 +182,30 @@ pub async fn create(
     // Start task in background
     task::spawn(async {
         let updated_status;
+        let receipt: Option<Vec<u8>>;
+        let receipt_id: Option<String>;
 
         // Proofs
         match do_prove(record_request).await {
-            Ok(_) => {
+            Ok((result, receipt_data)) => {
                 println!("Proof ran successfully");
-                updated_status = ProofSessionStatus::Completed
+                updated_status = ProofSessionStatus::Completed;
+                receipt = Some(receipt_data);
+                dbg!(&result);
             }
             Err(_) => {
                 println!("Failed to run proof");
-                updated_status = ProofSessionStatus::Failed
+                updated_status = ProofSessionStatus::Failed;
+                receipt = None;
             }
         };
+
+        if let Some(receipt) = receipt {
+            let part = reqwest::multipart::Part::bytes(receipt).file_name("receipt.bin");
+            receipt_id = Some(upload_to_ipfs(part).await.unwrap());
+        } else {
+            receipt_id = None
+        }
 
         // TODO: Update session data
         let _: ProofSessionRecord = DB
@@ -196,6 +213,7 @@ pub async fn create(
             .merge(ProofSessionCompleteRecord {
                 status: updated_status,
                 completed_at: Datetime::default(),
+                receipt_id,
             })
             .await
             .expect("Failed to update proof session status");
@@ -204,50 +222,11 @@ pub async fn create(
     Ok(record)
 }
 
-fn read_from_archive(content: &Vec<u8>, file_path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    let decoder = GzDecoder::new(content.as_slice());
-    let mut archive = Archive::new(decoder);
-
-    for entry_result in archive.entries().unwrap() {
-        let mut entry = entry_result?;
-
-        if let Some(entry_path) = entry.path()?.to_str() {
-            let matchable_path = entry_path.splitn(2, '/').nth(1).unwrap_or("");
-            if matchable_path != "" && matchable_path == file_path {
-                // Create a buffer to read the contents of the file into
-                let mut buffer = Vec::new();
-                entry.read_to_end(&mut buffer)?;
-
-                // You can return the buffer or do something else with it
-                return Ok(buffer);
-            }
-        }
-    }
-
-    Err("File not found in archive".into())
-}
-
-pub async fn read_from_ipfs(cid: &String) -> Result<Vec<u8>, Box<dyn Error>> {
-    let base_url = "https://dweb.link/api/v0";
-    let cid_url = format!("{}/cat/{}", base_url, cid);
-    println!("Download file {:?}", &cid_url);
-
-    let client: Client = Client::builder().build().unwrap();
-    let response = client.get(&cid_url).send().await.unwrap();
-
-    if response.status() != StatusCode::OK {
-        println!("Error");
-    }
-
-    let content = response.bytes().await.unwrap().to_vec();
-    println!("Got file {:?}", &cid_url);
-
-    Ok(content)
-}
-
-async fn do_prove(payload: ProofSessionRequest) -> Result<(), Box<dyn Error>> {
+async fn do_prove(payload: ProofSessionRequest) -> Result<(Value, Vec<u8>), Box<dyn Error>> {
     let cid = payload.cid;
-    let content = read_from_ipfs(&cid).await.expect("msg");
+    let content = download_from_ipfs(&cid)
+        .await
+        .expect("Failed to find package.");
     let manifest_raw =
         read_from_archive(&content, "manifest.json").expect("Manifest should exists");
     let manifest: Manifest =
@@ -289,23 +268,16 @@ async fn do_prove(payload: ProofSessionRequest) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let env = env_builder.build().unwrap();
-
     // Obtain the default prover.
     let prover = default_prover();
 
-    let now = Instant::now();
-
     // Produce a receipt by proving the specified ELF binary.
-    let receipt = prover.prove_elf(env, &elf_file).unwrap();
+    let receipt = prover
+        .prove_elf(env_builder.build().unwrap(), &elf_file)
+        .unwrap();
     receipt.verify(manifest.elf_id).unwrap();
 
-    // let program = Program::load_elf(&elf_file, MEM_SIZE as u32).unwrap();
-    // let image = MemoryImage::new(&program, PAGE_SIZE as u32).unwrap();
-    // let image_id = hex::encode(image.compute_id());
-
-    // let metadata: ReceiptMetadata = receipt.get_metadata().unwrap();
-
+    // Parse result into a JSON value
     let result: Value = match payload.result_type {
         DynType::Integer | DynType::I32 => {
             let int_result: i32 = from_slice(&receipt.journal).unwrap();
@@ -325,17 +297,8 @@ async fn do_prove(payload: ProofSessionRequest) -> Result<(), Box<dyn Error>> {
         }
     };
 
-    // let receipt_data = bincode::serialize(&receipt).unwrap();
-    println!("Receipt: {:?}", result);
+    // Searlize the binary reciept data
+    let receipt_data = bincode::serialize(&receipt).unwrap();
 
-    // println!("Seal Bytes: {:?}", receipt.inner.flat());
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
-
-    // let body: Json<Value> = Json(json!({
-    //     "result": result,
-    //     "metadata": metadata
-    // }));
-
-    Ok(())
+    Ok((result, receipt_data))
 }

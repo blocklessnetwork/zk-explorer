@@ -38,7 +38,7 @@ async fn api_fetch_proof_status(Path(id): Path<String>) -> AxumResult<Json<Value
 async fn api_list_proof_by_image(Path(image_id): Path<String>) -> AxumResult<Json<Value>> {
     let proof_sessions: Vec<ProofSessionRecord> = proof_session::list_by_image_id(&image_id)
         .await
-        .expect("msg");
+        .expect("Unable to list proof sessions");
 
     Ok(Json(json!(proof_sessions)))
 }
