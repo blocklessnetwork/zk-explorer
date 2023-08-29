@@ -9,7 +9,7 @@ use risc0_zkvm::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use surrealdb::sql::Thing;
+use surrealdb::sql::{Datetime, Thing};
 use tar::Archive;
 use tokio::task;
 use uuid::Uuid;
@@ -40,7 +40,7 @@ pub struct ProofSessionArgument {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum ProofSessionStatus {
+pub enum ProofSessionStatus {
     Preparing,
     InProgress,
     Completed,
@@ -59,11 +59,21 @@ struct ProofSession<'a> {
     session_id: &'a String,
     is_wasm: bool,
     image_id: &'a String,
-    receipt_id: Option<&'a String>,
     status: ProofSessionStatus,
     arguments_type: &'a Vec<DynType>,
     arguments: &'a Vec<ProofSessionArgument>,
     result_type: &'a DynType,
+
+    receipt_id: Option<&'a String>,
+
+    created_at: &'a Datetime,
+    completed_at: Option<&'a Datetime>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ProofSessionCompleteRecord {
+    status: ProofSessionStatus,
+    completed_at: Datetime,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,15 +81,13 @@ pub struct ProofSessionRecord {
     id: Thing,
     pub session_id: String,
     pub image_id: String,
-    is_wasm: bool,
+    pub is_wasm: bool,
 
     #[serde(default = "ProofSessionStatus::default")]
-    status: ProofSessionStatus,
-}
+    pub status: ProofSessionStatus,
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ProofSessionStatusRecord {
-    status: ProofSessionStatus,
+    pub created_at: Datetime,
+    pub completed_at: Datetime
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,6 +160,8 @@ pub async fn create(
             arguments_type: &arguments_type,
             result_type: &result_type,
             arguments,
+            created_at: &Datetime::default(),
+            completed_at: None,
         })
         .await
         .unwrap();
@@ -183,8 +193,9 @@ pub async fn create(
         // TODO: Update session data
         let _: ProofSessionRecord = DB
             .update((SESSION, record_id))
-            .merge(ProofSessionStatusRecord {
+            .merge(ProofSessionCompleteRecord {
                 status: updated_status,
+                completed_at: Datetime::default(),
             })
             .await
             .expect("Failed to update proof session status");
