@@ -34,7 +34,7 @@ async fn main() {
     // Setup routes
     let router = Router::new()
         .route("/", get(api_handler_intro))
-        .merge(web::routes_prove::routes())
+        .merge(web::routes_proofs::routes())
         .merge(web::routes_verify::routes())
         .merge(web::routes_image::routes())
         .fallback(api_handler_404);

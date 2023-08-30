@@ -70,7 +70,7 @@ struct ProofSession<'a> {
     receipt_id: Option<&'a String>,
 
     created_at: Datetime,
-    completed_at: Datetime,
+    completed_at: Option<Datetime>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,10 +89,10 @@ pub struct ProofSessionRecord {
 
     #[serde(default = "ProofSessionStatus::default")]
     pub status: ProofSessionStatus,
-    pub receipt_id: String,
+    pub receipt_id: Option<String>,
 
     pub created_at: Datetime,
-    pub completed_at: Datetime,
+    pub completed_at: Option<Datetime>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,7 +166,7 @@ pub async fn create(
             result_type: &result_type,
             arguments,
             created_at: Datetime::default(),
-            completed_at: Datetime::default(),
+            completed_at: None,
         })
         .await
         .unwrap();
