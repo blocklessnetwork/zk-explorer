@@ -1,4 +1,4 @@
-use reqwest::multipart::{self};
+use reqwest::multipart::{Form, Part};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -25,13 +25,15 @@ pub async fn download_from_ipfs(cid: &String) -> Result<Vec<u8>, Box<dyn Error>>
     Ok(content)
 }
 
-pub async fn upload_to_ipfs(file: multipart::Part) -> Result<String, Box<dyn Error>> {
-    let form = multipart::Form::new().part("file", file);
+pub async fn upload_to_ipfs(file_name: &str, file: Part) -> Result<String, Box<dyn Error>> {
+    let mut form = Form::new();
+    form = form.part("file", file);
 
     let response = reqwest::Client::new()
         .post("https://api.web3.storage/upload")
         .bearer_auth(env::var("WEB3_STORAGE_TOKEN").unwrap())
         .multipart(form)
+        .header("X-NAME", file_name)
         .send()
         .await
         .unwrap();

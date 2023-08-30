@@ -7,8 +7,8 @@ use std::env;
 mod db;
 mod error;
 mod services;
-mod web;
 mod utils;
+mod web;
 
 async fn api_handler_intro() -> &'static str {
     "Blockless ZK Playground."
@@ -35,7 +35,6 @@ async fn main() {
     let router = Router::new()
         .route("/", get(api_handler_intro))
         .merge(web::routes_proofs::routes())
-        .merge(web::routes_verify::routes())
         .merge(web::routes_image::routes())
         .fallback(api_handler_404);
 
