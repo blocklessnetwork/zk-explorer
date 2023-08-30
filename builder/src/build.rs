@@ -95,13 +95,10 @@ pub async fn generate_wasm_elf_binaries(
     let image: MemoryImage = MemoryImage::new(&program, PAGE_SIZE as u32)?;
     let image_id: String = hex::encode(image.compute_id());
 
-    // @TODO Upload image and manifest to IPFS
-    let image: Vec<u8> = bincode::serialize(&image).expect("Failed to serialize memory img");
-
     // @TODO Clean up the temporary directory
-    remove_dir_all(project_dir).expect("msg");
+    remove_dir_all(project_dir).expect("Unable to remove temp directory");
 
-    Ok((image_id, image))
+    Ok((image_id, elf_file))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,7 +107,7 @@ struct Manifest {
     elf_path: String,
     elf_id: String,
     argument_type: Vec<DynType>,
-    result_type: String,
+    result_type: DynType,
 }
 
 pub async fn upload_package_to_ipfs(
@@ -123,7 +120,7 @@ pub async fn upload_package_to_ipfs(
     let temp_dir = temp_dir();
     let dir_name = format!("bls_{}", rand::random::<u64>());
     let package_dir = temp_dir.join(&dir_name);
-    fs::create_dir_all(&package_dir).expect("msg");
+    fs::create_dir_all(&package_dir)?;
 
     let elf_file_name = "elf";
     let wasm_file_name = "zk.wasm";
@@ -140,7 +137,7 @@ pub async fn upload_package_to_ipfs(
         elf_path: elf_file_name.into(),
         elf_id: image_id.to_string(),
         argument_type: argument_type.to_vec(),
-        result_type: result_type.to_string(),
+        result_type: result_type.to_owned(),
     };
 
     let json_manifest = serde_json::to_string_pretty(&manifest).expect("JSON serialization failed");
@@ -158,7 +155,7 @@ pub async fn upload_package_to_ipfs(
         None, // if use compression with zstd level
     )
     .await
-    .expect("failed to upload");
+    .expect("Failed to upload.");
 
     Ok(results.first().unwrap().to_string())
 }

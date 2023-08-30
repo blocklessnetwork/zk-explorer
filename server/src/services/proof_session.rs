@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error, str::FromStr};
 
 use hex::FromHex;
 use reqwest::multipart::Part;
@@ -16,10 +16,7 @@ use uuid::Uuid;
 
 use crate::{
     db::DB,
-    utils::{
-        archive::read_from_archive,
-        ipfs::{download_from_ipfs, upload_to_ipfs},
-    },
+    utils::ipfs::{download_from_ipfs, list_manifest_from_ipfs, upload_to_ipfs},
 };
 
 const SESSION: &str = "session";
@@ -33,9 +30,33 @@ pub enum DynType {
     Integer,
     Float,
 }
-impl DynType {
-    pub fn default() -> Self {
-        DynType::Integer
+
+impl ToString for DynType {
+    fn to_string(&self) -> String {
+        match &self {
+            DynType::I32 => "i32".into(),
+            DynType::I64 => "i64".into(),
+            DynType::F32 => "f32".into(),
+            DynType::F64 => "f64".into(),
+            DynType::Integer => "i32".into(),
+            DynType::Float => "f32".into(),
+        }
+    }
+}
+
+impl FromStr for DynType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "i32" => Ok(DynType::I32),
+            "i64" => Ok(DynType::I64),
+            "f32" => Ok(DynType::F32),
+            "f64" => Ok(DynType::F64),
+            "integer" => Ok(DynType::I32),
+            "float" => Ok(DynType::F32),
+            _ => Err(()),
+        }
     }
 }
 
@@ -106,17 +127,19 @@ pub struct ProofSessionRecord {
     pub completed_at: Option<Datetime>,
 }
 
-#[derive(Debug, Deserialize)]
-struct Manifest {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Manifest {
     wasm_path: Option<String>,
     elf_path: String,
-    elf_id: [u32; 8],
+    elf_id: String,
+    argument_type: Vec<DynType>,
+    result_type: DynType,
 }
 
 #[derive(Debug, Deserialize)]
 struct ProofSessionRequest {
-    cid: String,
-    is_wasm: bool,
+    manifest: Manifest,
+    files: HashMap<String, String>,
     arguments: Vec<ProofSessionArgument>,
     result_type: DynType,
 }
@@ -191,10 +214,9 @@ pub async fn create(
 ) -> Result<ProofSessionRecord, Box<dyn Error>> {
     // Generate a random session UUID
     let random_id: String = Uuid::new_v4().to_string();
-
-    // Load image manifest
-    let arguments_type: Vec<DynType> = vec![DynType::default()];
-    let result_type: DynType = DynType::default();
+    let (manifest, files) = list_manifest_from_ipfs(&image_cid)
+        .await
+        .expect("Failed to fetch manifest.");
 
     // Create a proof session record
     let record: ProofSessionRecord = DB
@@ -204,10 +226,10 @@ pub async fn create(
             image_id: None,
             image_cid,
             status: ProofSessionStatus::Preparing,
-            is_wasm: true,
+            is_wasm: manifest.wasm_path.is_some(),
             receipt_cid: None,
-            arguments_type: &arguments_type,
-            result_type: &result_type,
+            arguments_type: &manifest.argument_type,
+            result_type: &manifest.result_type,
             arguments,
             created_at: Datetime::default(),
             completed_at: None,
@@ -217,10 +239,10 @@ pub async fn create(
 
     let record_id = record.id.id.clone().to_string();
     let record_request = ProofSessionRequest {
-        cid: image_cid.into(),
-        is_wasm: true,
+        manifest: manifest.into(),
+        files: files.into(),
         arguments: arguments.to_vec(),
-        result_type,
+        result_type: record.result_type.clone(),
     };
 
     // Start task in background
@@ -231,7 +253,7 @@ pub async fn create(
         let receipt_cid: Option<String>;
         let session_id = random_id;
 
-        // Proofs
+        // // Proofs
         match do_prove(record_request).await {
             Ok((image_id_data, receipt_data, _)) => {
                 updated_status = ProofSessionStatus::Completed;
@@ -275,28 +297,22 @@ pub async fn create(
 async fn do_prove(
     payload: ProofSessionRequest,
 ) -> Result<(String, Vec<u8>, Value), Box<dyn Error>> {
-    let cid = payload.cid;
-    let content = download_from_ipfs(&cid)
-        .await
-        .expect("Failed to find package.");
-    let manifest_raw =
-        read_from_archive(&content, "manifest.json").expect("Manifest should exists");
-    let manifest: Manifest =
-        serde_json::from_slice(&manifest_raw).expect("Unable to parse manifest");
-
-    let mut env_builder = ExecutorEnv::builder();
-
     // Add WASM
-    if payload.is_wasm && manifest.wasm_path.is_some() {
-        let wasm_file = read_from_archive(&content, &manifest.wasm_path.unwrap().replace("./", ""))
-            .expect("WASM file not found");
-
-        env_builder.add_input(&to_vec(&wasm_file).unwrap());
+    let wasm_file: Option<Vec<u8>>;
+    if let Some(wasm_path) = &payload.manifest.wasm_path {
+        wasm_file = Some(download_from_ipfs(payload.files.get(wasm_path).unwrap()).await?);
+    } else {
+        wasm_file = None
     }
 
     // Add ELF Binary
-    let elf_file = read_from_archive(&content, &manifest.elf_path.replace("./", ""))
-        .expect("ELF file not found");
+    let elf_file: Vec<u8> =
+        download_from_ipfs(payload.files.get(&payload.manifest.elf_path).unwrap()).await?;
+    let mut env_builder = ExecutorEnv::builder();
+
+    if wasm_file.is_some() {
+        env_builder.add_input(&to_vec(&wasm_file.unwrap()).unwrap());
+    }
 
     // Add params
     for arg in payload.arguments {
@@ -323,7 +339,7 @@ async fn do_prove(
     // Obtain the default prover.
     let prover = default_prover();
 
-    let program = Program::load_elf(&elf_file, MEM_SIZE as u32)?;
+    let program = Program::load_elf(&elf_file, MEM_SIZE as u32).expect("Failed to execute proof.");
     let image = MemoryImage::new(&program, PAGE_SIZE as u32)?;
     let image_id = hex::encode(image.compute_id());
 
@@ -331,7 +347,9 @@ async fn do_prove(
     let receipt = prover
         .prove_elf(env_builder.build().unwrap(), &elf_file)
         .unwrap();
-    receipt.verify(manifest.elf_id).unwrap();
+    receipt
+        .verify(Digest::from_hex(&payload.manifest.elf_id).unwrap())
+        .unwrap();
 
     // Parse result into a JSON value
     let result: Value = match payload.result_type {

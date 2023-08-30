@@ -139,10 +139,10 @@ pub async fn build_image() -> Result<(), Box<dyn Error>> {
 
     println!("Compiled binary: {:?}", compiled_binary);
 
-    let wasm_file: Vec<u8> = fs::read(compiled_binary).expect("msg");
+    let wasm_file: Vec<u8> = fs::read(compiled_binary)?;
 
-    let program: Program = Program::load_elf(&wasm_file, MEM_SIZE as u32).expect("msg");
-    let image: MemoryImage = MemoryImage::new(&program, PAGE_SIZE as u32).expect("msg");
+    let program: Program = Program::load_elf(&wasm_file, MEM_SIZE as u32)?;
+    let image: MemoryImage = MemoryImage::new(&program, PAGE_SIZE as u32)?;
     let image_id: String = hex::encode(image.compute_id());
     let image_id_digest = Digest::from_hex(&image_id).unwrap();
 
