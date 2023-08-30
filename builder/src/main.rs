@@ -1,16 +1,18 @@
+mod build;
+mod templates;
 mod utils;
-mod wasm;
 
 use std::{fs::File, io::Read, str::FromStr};
 
+use build::generate_wasm_elf_binaries;
 use clap::{Parser, ValueEnum};
+use serde::{Deserialize, Serialize};
 use utils::is_wasm_file;
-use wasm::build::generate_wasm_elf_binaries;
 
-fn build_elf(args: &Args) {
-    // Validate path
+use crate::build::upload_package_to_ipfs;
 
-    dbg!(args);
+fn build_elf(_: &Args) {
+    println!("TODO: ELF Builds");
 }
 
 async fn build_wasm(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
@@ -18,6 +20,7 @@ async fn build_wasm(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
         return Err("Path is not a wasm file.".into());
     }
 
+    // Load Wasm File
     let mut wasm_file: Vec<u8> = Vec::new();
     let mut file = File::open(&args.path)?;
     file.read_to_end(&mut wasm_file)
@@ -28,8 +31,17 @@ async fn build_wasm(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
             .await
             .expect("Unable to generate WASM Elf binaries.");
 
-    dbg!(&image_id);
-    // dbg!(&image);
+    let cid = upload_package_to_ipfs(
+        &image_id,
+        &image,
+        Some(&wasm_file),
+        &args.argument_type,
+        &args.result_type,
+    )
+    .await
+    .unwrap();
+
+    println!("\n{}", &cid);
 
     Ok(())
 }
@@ -42,7 +54,7 @@ enum Mode {
     WASM,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum DynType {
     I32,
     I64,
@@ -110,16 +122,10 @@ async fn main() {
 
     match args.mode {
         Mode::ELF => {
-            println!("Build elf");
-            dbg!(&args);
             build_elf(&args);
         }
         Mode::WASM => {
-            println!("Build wasm");
-            dbg!(&args);
             build_wasm(&args).await.unwrap();
         }
     };
-
-    // println!("Buildin path {}!", args.path);
 }

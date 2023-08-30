@@ -1,9 +1,10 @@
 use risc0_zkvm::{MemoryImage, Program, MEM_SIZE, PAGE_SIZE};
-use std::env::temp_dir;
+use serde::{Deserialize, Serialize};
+use std::env::{self, temp_dir};
 use std::fs::{self, remove_dir_all};
 use std::process::Command;
 
-use crate::wasm::templates::templates::{
+use crate::templates::templates::{
     WASM_BUILD_TEMPLATE_BUILD_RS, WASM_BUILD_TEMPLATE_CARGO_TOML,
     WASM_BUILD_TEMPLATE_GUEST_CARGO_TOML, WASM_BUILD_TEMPLATE_GUEST_MAIN_RS,
     WASM_BUILD_TEMPLATE_LIB_RS,
@@ -15,7 +16,7 @@ pub async fn generate_wasm_elf_binaries(
     argument_type: &Vec<DynType>,
     result_type: &DynType,
 ) -> Result<(String, Vec<u8>), Box<dyn std::error::Error>> {
-    println!("Building project...");
+    println!("Building ...\n");
 
     // Prepare arguments
     let argument_type_val: Vec<String> = argument_type
@@ -88,15 +89,11 @@ pub async fn generate_wasm_elf_binaries(
         .join("release");
     let compiled_binary = release_id.join("wasm-guest");
 
-    println!("Compiled binary: {:?}", compiled_binary);
-
     let elf_file: Vec<u8> = fs::read(compiled_binary).expect("Unable to locate ELF binaries.");
     let program: Program =
         Program::load_elf(&elf_file, MEM_SIZE as u32).expect("Failed to load ELF binaries.");
     let image: MemoryImage = MemoryImage::new(&program, PAGE_SIZE as u32)?;
     let image_id: String = hex::encode(image.compute_id());
-
-    println!("Image ID {}", image_id);
 
     // @TODO Upload image and manifest to IPFS
     let image: Vec<u8> = bincode::serialize(&image).expect("Failed to serialize memory img");
@@ -105,4 +102,63 @@ pub async fn generate_wasm_elf_binaries(
     remove_dir_all(project_dir).expect("msg");
 
     Ok((image_id, image))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Manifest {
+    wasm_path: String,
+    elf_path: String,
+    elf_id: String,
+    argument_type: Vec<DynType>,
+    result_type: String,
+}
+
+pub async fn upload_package_to_ipfs(
+    image_id: &String,
+    image: &Vec<u8>,
+    wasm: Option<&Vec<u8>>,
+    argument_type: &Vec<DynType>,
+    result_type: &DynType,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let temp_dir = temp_dir();
+    let dir_name = format!("bls_{}", rand::random::<u64>());
+    let package_dir = temp_dir.join(&dir_name);
+    fs::create_dir_all(&package_dir).expect("msg");
+
+    let elf_file_name = "elf";
+    let wasm_file_name = "zk.wasm";
+
+    // Save files in temp directory
+    fs::write(package_dir.join(elf_file_name), image).unwrap();
+
+    if let Some(wasm) = wasm {
+        fs::write(package_dir.join(wasm_file_name), wasm).unwrap();
+    }
+
+    let manifest = Manifest {
+        wasm_path: wasm_file_name.into(),
+        elf_path: elf_file_name.into(),
+        elf_id: image_id.to_string(),
+        argument_type: argument_type.to_vec(),
+        result_type: result_type.to_string(),
+    };
+
+    let json_manifest = serde_json::to_string_pretty(&manifest).expect("JSON serialization failed");
+
+    fs::write(package_dir.join("manifest.json"), json_manifest)
+        .expect("Failed to write JSON to file");
+
+    let results = w3s::helper::upload_dir(
+        &package_dir.into_os_string().into_string().unwrap(),
+        None,
+        env::var("WEB3_STORAGE_TOKEN").unwrap(),
+        2,
+        None,
+        None, // if use encryption with password
+        None, // if use compression with zstd level
+    )
+    .await
+    .expect("failed to upload");
+
+    Ok(results.first().unwrap().to_string())
 }
