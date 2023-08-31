@@ -20,30 +20,46 @@ interface ManifestRecord {
 	result_type: string
 }
 
-async function getManifestDetail(id: string): Promise<any> {
-	const res = await fetch(`https://dweb.link/api/v0/cat/${id}`)
-	return res.ok ? await res.json() : null
+async function getManifestDetail(id: string): Promise<ManifestRecord | null> {
+	try {
+		const res = await fetch(`https://dweb.link/api/v0/cat/${id}`)
+		return res.ok ? await res.json() : null
+	} catch (error) {
+		return null
+	}
 }
 
 async function getImageDetail(
 	imageId: string
 ): Promise<{ manifest: ManifestRecord; files: { Name: string; Hash: string }[] } | null> {
-	const res = await fetch(`https://dweb.link/api/v0/ls/${imageId}`)
-	const data = await res.json()
+	try {
+		const res = await fetch(`https://dweb.link/api/v0/ls/${imageId}`)
+		const data = res.ok ? await res.json() : null
 
-	if (data.Objects && data.Objects[0] && data.Objects[0]?.Links.length === 3) {
-		const files = data.Objects[0]?.Links.filter((l: any) => l.Name !== 'manifest.json')
-		const manifestData = data.Objects[0]?.Links.find((l: any) => l.Name === 'manifest.json')
-		const manifest = await getManifestDetail(manifestData.Hash)
-		return { manifest, files }
-	} else {
+		if (data.Objects && data.Objects[0] && data.Objects[0]?.Links.length === 3) {
+			const files = data.Objects[0]?.Links.filter((l: any) => l.Name !== 'manifest.json')
+			const manifestData = data.Objects[0]?.Links.find((l: any) => l.Name === 'manifest.json')
+			const manifest = await getManifestDetail(manifestData.Hash)
+			if (!manifest) return null
+			
+			return { manifest, files }
+		} else {
+			return null
+		}
+	} catch (error) {
 		return null
 	}
 }
 
 async function getProofs(imageId: string): Promise<ProofRecord[]> {
-	const res = await fetch(`http://localhost:3005/api/proofs/by-image/${imageId}`, { cache: 'no-cache' })
-	return await res.json()
+	try {
+		const res = await fetch(`http://localhost:3005/api/proofs/by-image/${imageId}`, {
+			cache: 'no-cache'
+		})
+		return res.ok ? await res.json() : []
+	} catch (error) {
+		return []
+	}
 }
 
 export default async function ImageDetail({ params }: { params: { id: string } }) {
@@ -63,7 +79,7 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 		<>
 			<div className="h-full flex-1 flex-col md:flex">
 				<div className="container flex flex-1 flex-col items-start space-y-2 py-4 md:h-16">
-					<div className='mb-4'>
+					<div className="mb-4">
 						<h2 className="text-2xl mb-1">Image</h2>
 						<p className="opacity-75">{params.id}</p>
 					</div>

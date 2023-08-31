@@ -43,19 +43,21 @@ export default function GenerateProofButton({
 			}))
 		}
 
-		const res = await fetch(`http://localhost:3005/api/proofs`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(data)
-		})
-
-		if (!res.ok) {
+		try {
+			const res = await fetch(`http://localhost:3005/api/proofs`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(data)
+			})
+	
+			if (!res.ok) {
+				toast({ title: 'Failed to generate proof', variant: 'destructive' })
+			}	
+		} catch (error) {
 			toast({ title: 'Failed to generate proof', variant: 'destructive' })
-		} else {
-			setTimeout(() => {
-				setIsLoading(false)
-				router.refresh()
-			}, 1000)
+		} finally {
+			setIsLoading(false)
+			router.refresh()
 		}
 	}
 

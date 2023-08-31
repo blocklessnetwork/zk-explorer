@@ -15,9 +15,29 @@ import { Download, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-async function getSessionDetail(id: string): Promise<any> {
-	const res = await fetch(`http://localhost:3005/api/proofs/${id}`, { cache: 'no-cache' })
-	return res.ok ? await res.json() : null
+interface SessionRecord {
+	status: string
+	arguments: { value: string; arg_type: string }[]
+
+	image_cid: string
+	receipt_cid: string
+	receipt_metadata: any
+
+	method: string
+	argument_type: string[]
+	result_type: string
+
+	created_at: string
+	completed_at: string
+}
+
+async function getSessionDetail(id: string): Promise<SessionRecord | null> {
+	try {
+		const res = await fetch(`http://localhost:3005/api/proofs/${id}`, { cache: 'no-cache' })
+		return res.ok ? await res.json() : null
+	} catch (error) {
+		return null
+	}
 }
 
 export default async function SessionDetail({ params }: { params: { id: string } }) {
@@ -45,7 +65,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{session.arguments.map((a: any, i: number) => (
+									{session.arguments.map((a, i: number) => (
 										<TableRow>
 											<TableCell>{i}</TableCell>
 											<TableCell>{a.arg_type}</TableCell>
@@ -56,7 +76,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 							</Table>
 						</div>
 						{session.status !== 'Completed' && (
-							<div className='flex gap-2 items-center'>
+							<div className="flex gap-2 items-center">
 								<Loader2 className="mr-2 h-4 w-4 animate-spin" />
 								<span>Loading ...</span>
 							</div>
