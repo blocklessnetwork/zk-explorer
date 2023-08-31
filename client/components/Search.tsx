@@ -45,7 +45,7 @@ export function Search() {
 	}
 
 	return (
-		<div className="flex gap-4">
+		<div className="flex justify-center gap-4">
 			<Input
 				type="search"
 				placeholder="Enter a proof session or image id ..."

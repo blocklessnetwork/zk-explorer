@@ -6,6 +6,7 @@ import { shortenString } from '@/utils/strings'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import WatViewer from '@/components/WatViewer'
+import CopyClipboardButton from '@/components/CopyClipboardButton'
 
 interface ManifestRecord {
 	wasm_path: string
@@ -71,7 +72,10 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 							</div>
 							<div className="flex flex-col gap-1">
 								<strong className="text-md">Image ID</strong>
-								<span>{shortenString(image.manifest.elf_id)}</span>
+								<div className="flex gap-2 items-center">
+									<span>{shortenString(image.manifest.elf_id)}</span>
+									<CopyClipboardButton text={image.manifest.elf_id} />
+								</div>
 							</div>
 							<div className="flex flex-col gap-1">
 								<strong className="text-md">Method</strong>
