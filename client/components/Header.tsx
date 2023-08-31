@@ -42,6 +42,14 @@ export default function Header() {
 										Home
 									</NavigationMenuLink>
 								</Link>
+								<Link href="/playground" legacyBehavior passHref>
+									<NavigationMenuLink
+										className={navigationMenuTriggerStyle()}
+										active={pathname === '/playground'}
+									>
+										Playground
+									</NavigationMenuLink>
+								</Link>
 							</NavigationMenuItem>
 						</NavigationMenuList>
 					</NavigationMenu>
