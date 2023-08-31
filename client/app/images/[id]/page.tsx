@@ -10,6 +10,7 @@ import CopyClipboardButton from '@/components/CopyClipboardButton'
 import { Download } from 'lucide-react'
 import Link from 'next/link'
 import GenerateProofButton from '@/components/GenerateProofButton'
+import { API_IPFS, API_IPFS_GATEWAY, API_SERVER } from '@/constants/api'
 
 interface ManifestRecord {
 	wasm_path: string
@@ -22,7 +23,7 @@ interface ManifestRecord {
 
 async function getManifestDetail(id: string): Promise<ManifestRecord | null> {
 	try {
-		const res = await fetch(`https://dweb.link/api/v0/cat/${id}`)
+		const res = await fetch(API_IPFS(`cat/${id}`))
 		return res.ok ? await res.json() : null
 	} catch (error) {
 		return null
@@ -33,7 +34,7 @@ async function getImageDetail(
 	imageId: string
 ): Promise<{ manifest: ManifestRecord; files: { Name: string; Hash: string }[] } | null> {
 	try {
-		const res = await fetch(`https://dweb.link/api/v0/ls/${imageId}`)
+		const res = await fetch(API_IPFS(`ls/${imageId}`))
 		const data = res.ok ? await res.json() : null
 
 		if (data.Objects && data.Objects[0] && data.Objects[0]?.Links.length === 3) {
@@ -41,7 +42,7 @@ async function getImageDetail(
 			const manifestData = data.Objects[0]?.Links.find((l: any) => l.Name === 'manifest.json')
 			const manifest = await getManifestDetail(manifestData.Hash)
 			if (!manifest) return null
-			
+
 			return { manifest, files }
 		} else {
 			return null
@@ -53,7 +54,7 @@ async function getImageDetail(
 
 async function getProofs(imageId: string): Promise<ProofRecord[]> {
 	try {
-		const res = await fetch(`http://localhost:3005/api/proofs/by-image/${imageId}`, {
+		const res = await fetch(API_SERVER(`proofs/by-image/${imageId}`), {
 			cache: 'no-cache'
 		})
 		return res.ok ? await res.json() : []
@@ -85,7 +86,7 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 					</div>
 					<div className="w-full flex gap-8 mb-8">
 						<div className="flex flex-1">
-							{wasmFile && <WatViewer fileUrl={`https://${wasmFile.Hash}.ipfs.w3s.link`} />}
+							{wasmFile && <WatViewer fileUrl={API_IPFS_GATEWAY(wasmFile.Hash)} />}
 						</div>
 						<div className="flex flex-col gap-4 w-1/4">
 							<div className="flex flex-col gap-1">
@@ -117,7 +118,7 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 									imageId={params.id}
 									argumentType={image.manifest.argument_type}
 								/>
-								<Link href={`https://${params.id}.ipfs.w3s.link`} target="_blank" rel="nofollow">
+								<Link href={API_IPFS_GATEWAY(params.id)} target="_blank" rel="nofollow">
 									<Button variant="secondary" className="h-full">
 										<Download />
 									</Button>
@@ -126,7 +127,7 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 						</div>
 					</div>
 					<div className="w-full">
-						<h2 className="text-xl mb-2">Proof Sessions</h2>
+						<h2 className="text-xl mb-2 mt-4">Proof Sessions</h2>
 						<DataTable columns={columns} data={proofs} />
 					</div>
 				</div>

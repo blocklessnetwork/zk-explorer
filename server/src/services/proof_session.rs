@@ -123,6 +123,7 @@ pub struct ProofSessionRecord {
 
     #[serde(default = "ProofSessionStatus::default")]
     pub status: ProofSessionStatus,
+    pub method: String,
     pub argument_type: Vec<DynType>,
     pub arguments: Vec<ProofSessionArgument>,
     pub result_type: DynType,
@@ -151,7 +152,7 @@ struct ProofSessionRequest {
 
 pub async fn list_by_image(image_cid: &String) -> Result<Vec<ProofSessionRecord>, Box<dyn Error>> {
     let mut response = DB
-        .query("SELECT * FROM type::table($table) WHERE image_cid = $image_cid")
+        .query("SELECT * FROM type::table($table) WHERE image_cid = $image_cid ORDER BY created_at DESC")
         .bind(("table", "session"))
         .bind(("image_cid", image_cid))
         .await

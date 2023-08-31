@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from './ui/use-toast'
+import { API_SERVER } from '@/constants/api'
 
 export default function GenerateProofButton({
 	imageId,
@@ -44,7 +45,7 @@ export default function GenerateProofButton({
 		}
 
 		try {
-			const res = await fetch(`http://localhost:3005/api/proofs`, {
+			const res = await fetch(API_SERVER('proofs'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(data)

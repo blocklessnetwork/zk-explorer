@@ -9,6 +9,7 @@ import {
 	TableCell
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { API_IPFS_GATEWAY, API_SERVER } from '@/constants/api'
 import { shortenString } from '@/utils/strings'
 import dayjs from 'dayjs'
 import { Download, Loader2 } from 'lucide-react'
@@ -33,7 +34,7 @@ interface SessionRecord {
 
 async function getSessionDetail(id: string): Promise<SessionRecord | null> {
 	try {
-		const res = await fetch(`http://localhost:3005/api/proofs/${id}`, { cache: 'no-cache' })
+		const res = await fetch(API_SERVER(`proofs/${id}`), { cache: 'no-cache' })
 		return res.ok ? await res.json() : null
 	} catch (error) {
 		return null
@@ -91,7 +92,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 									/>
 								</div>
 								<div className="flex">
-									<Link href={`https://${session.receipt_cid}.ipfs.w3s.link`} target="_blank">
+									<Link href={API_IPFS_GATEWAY(session.receipt_cid)} target="_blank">
 										<Button>
 											<Download className="mr-2" />
 											Download Receipt
@@ -121,7 +122,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 						</div>
 						<Separator />
 						<div className="flex flex-col gap-1">
-							<strong className="text-md">Image ID</strong>
+							<strong className="text-md">Image</strong>
 							<div className="flex gap-2 items-center">
 								<Link href={`/images/${session.image_cid}`}>
 									{shortenString(session.image_cid)}

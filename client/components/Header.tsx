@@ -21,7 +21,13 @@ export default function Header() {
 				<div className="container flex flex-col items-start justify-between space-y-2 py-4 sm:flex-row sm:items-center sm:space-y-0 md:h-16">
 					<div>
 						<Link href="/" className="flex items-center">
-							<Image src="/bls-logo.png" width={32} height={32} alt="Blockless" className="bls-logo mr-3" />
+							<Image
+								src="/bls-logo.png"
+								width={32}
+								height={32}
+								alt="Blockless"
+								className="bls-logo mr-3"
+							/>
 							<h2 className="text-lg font-semibold whitespace-nowrap">ZK Explorer</h2>
 						</Link>
 					</div>
@@ -34,14 +40,6 @@ export default function Header() {
 										active={pathname === '/'}
 									>
 										Home
-									</NavigationMenuLink>
-								</Link>
-								<Link href="/playground" legacyBehavior passHref>
-									<NavigationMenuLink
-										className={navigationMenuTriggerStyle()}
-										active={pathname === '/playground'}
-									>
-										Playground
 									</NavigationMenuLink>
 								</Link>
 							</NavigationMenuItem>
