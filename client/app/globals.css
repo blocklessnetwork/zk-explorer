@@ -77,3 +77,7 @@
     flex-direction: column;
   }
 }
+
+html.dark .bls-logo {
+  filter: brightness(0) invert(1);
+}
