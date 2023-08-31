@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 
 use crate::{
     error::AxumResult,
-    services::proof_session::{self, ProofSessionArgument, ProofSessionRecord},
+    services::proof_session::{self, ProofSessionArgument},
+    Error,
 };
 
 #[derive(Debug, Deserialize)]
@@ -29,37 +30,32 @@ pub fn routes() -> Router {
 }
 
 async fn api_fetch_proof_status(Path(id): Path<String>) -> AxumResult<Json<Value>> {
-    let proof_session: ProofSessionRecord = proof_session::fetch(&id)
-        .await
-        .expect("Proof Session not Found");
-
-    Ok(Json(json!(proof_session)))
+    match proof_session::fetch(&id).await {
+        Ok(proof_session) => Ok(Json(json!(proof_session))),
+        Err(_) => return Err(Error::NotFound),
+    }
 }
 
 async fn api_list_proof_by_image(Path(image_cid): Path<String>) -> AxumResult<Json<Value>> {
-    let proof_sessions: Vec<ProofSessionRecord> = proof_session::list_by_image(&image_cid)
-        .await
-        .expect("Unable to list proof sessions");
-
-    Ok(Json(json!(proof_sessions)))
+    match proof_session::list_by_image(&image_cid).await {
+        Ok(proof_sessions) => Ok(Json(json!(proof_sessions))),
+        Err(_) => return Err(Error::NotFound),
+    }
 }
 
 async fn api_proof_create(Json(payload): Json<ProofSessionPayload>) -> AxumResult<Json<Value>> {
-    let proof_session: ProofSessionRecord =
-        proof_session::create(&payload.image_cid, &payload.arguments)
-            .await
-            .expect("Unable to create the proof session");
-
-    Ok(Json(json!({ "session_id": proof_session.session_id })))
+    match proof_session::create(&payload.image_cid, &payload.arguments).await {
+        Ok(proof_session) => Ok(Json(json!({ "session_id": proof_session.session_id }))),
+        Err(_) => return Err(Error::FailedToCreate),
+    }
 }
 
 async fn api_fetch_proof_verification(Path(id): Path<String>) -> AxumResult<Json<Value>> {
-    let proof_session_result = proof_session::verify(&id)
-        .await
-        .expect("Unable to verify the proof session");
-
-    Ok(Json(json!({
-        "verified": true,
-        "result": proof_session_result
-    })))
+    match proof_session::verify(&id).await {
+        Ok(proof_session_result) => Ok(Json(json!({
+            "verified": true,
+            "result": proof_session_result
+        }))),
+        Err(_) => return Err(Error::FailedToVerify),
+    }
 }
