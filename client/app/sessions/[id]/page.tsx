@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 
 async function getSessionDetail(id: string): Promise<any> {
 	const res = await fetch(`http://localhost:3005/api/proofs/${id}`)
-	return await res.json()
+	return res.ok ? await res.json() : null
 }
 
 export default async function SessionDetail({ params }: { params: { id: string } }) {

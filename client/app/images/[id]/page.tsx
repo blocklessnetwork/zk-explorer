@@ -2,7 +2,6 @@ import { CID } from 'multiformats'
 import { ProofRecord, columns } from './columns'
 import { DataTable } from './data-table'
 import { notFound } from 'next/navigation'
-import { Textarea } from '@/components/ui/textarea'
 import { shortenString } from '@/utils/strings'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
@@ -19,7 +18,7 @@ interface ManifestRecord {
 
 async function getManifestDetail(id: string): Promise<any> {
 	const res = await fetch(`https://dweb.link/api/v0/cat/${id}`)
-	return await res.json()
+	return res.ok ? await res.json() : null
 }
 
 async function getImageDetail(
