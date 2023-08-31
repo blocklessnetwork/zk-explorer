@@ -106,6 +106,7 @@ struct Manifest {
     wasm_path: String,
     elf_path: String,
     elf_id: String,
+    method: String,
     argument_type: Vec<DynType>,
     result_type: DynType,
 }
@@ -114,6 +115,7 @@ pub async fn upload_package_to_ipfs(
     image_id: &String,
     image: &Vec<u8>,
     wasm: Option<&Vec<u8>>,
+    method: &String,
     argument_type: &Vec<DynType>,
     result_type: &DynType,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -136,6 +138,7 @@ pub async fn upload_package_to_ipfs(
         wasm_path: wasm_file_name.into(),
         elf_path: elf_file_name.into(),
         elf_id: image_id.to_string(),
+        method: method.to_string(),
         argument_type: argument_type.to_vec(),
         result_type: result_type.to_owned(),
     };

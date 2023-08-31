@@ -35,6 +35,7 @@ async fn build_wasm(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
         &image_id,
         &image,
         Some(&wasm_file),
+        &args.method,
         &args.argument_type,
         &args.result_type,
     )

@@ -3,6 +3,7 @@ use crate::db::connect_db;
 pub use self::error::{AxumResult, Error};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use std::env;
+use tower_http::cors::CorsLayer;
 
 mod db;
 mod error;
@@ -36,7 +37,8 @@ async fn main() {
         .route("/", get(api_handler_intro))
         .merge(web::routes_proofs::routes())
         .merge(web::routes_image::routes())
-        .fallback(api_handler_404);
+        .fallback(api_handler_404)
+        .layer(CorsLayer::permissive());
 
     println!("Server running on port 3005");
     axum::Server::bind(&web_host.parse().unwrap())

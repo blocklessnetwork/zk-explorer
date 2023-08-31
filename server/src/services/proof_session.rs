@@ -6,7 +6,7 @@ use risc0_zkvm::{
     default_prover,
     serde::{from_slice, to_vec},
     sha::Digest,
-    ExecutorEnv, MemoryImage, Program, Receipt, MEM_SIZE, PAGE_SIZE,
+    ExecutorEnv, MemoryImage, Program, Receipt, ReceiptMetadata, MEM_SIZE, PAGE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -89,9 +89,11 @@ struct ProofSession<'a> {
     image_id: Option<&'a String>,
     image_cid: &'a String,
     receipt_cid: Option<&'a String>,
+    receipt_metadata: Option<&'a ReceiptMetadata>,
 
     status: ProofSessionStatus,
-    arguments_type: &'a Vec<DynType>,
+    argument_type: &'a Vec<DynType>,
+    method: &'a String,
     arguments: &'a Vec<ProofSessionArgument>,
     result_type: &'a DynType,
 
@@ -105,6 +107,7 @@ struct ProofSessionCompleteRecord {
     completed_at: Datetime,
     image_id: Option<String>,
     receipt_cid: Option<String>,
+    receipt_metadata: Option<ReceiptMetadata>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,10 +119,11 @@ pub struct ProofSessionRecord {
     pub image_id: Option<String>,
     pub image_cid: String,
     pub receipt_cid: Option<String>,
+    pub receipt_metadata: Option<ReceiptMetadata>,
 
     #[serde(default = "ProofSessionStatus::default")]
     pub status: ProofSessionStatus,
-    pub arguments_type: Vec<DynType>,
+    pub argument_type: Vec<DynType>,
     pub arguments: Vec<ProofSessionArgument>,
     pub result_type: DynType,
 
@@ -132,6 +136,7 @@ pub struct Manifest {
     wasm_path: Option<String>,
     elf_path: String,
     elf_id: String,
+    method: String,
     argument_type: Vec<DynType>,
     result_type: DynType,
 }
@@ -228,11 +233,13 @@ pub async fn create(
             status: ProofSessionStatus::Preparing,
             is_wasm: manifest.wasm_path.is_some(),
             receipt_cid: None,
-            arguments_type: &manifest.argument_type,
+            argument_type: &manifest.argument_type,
+            method: &manifest.method,
             result_type: &manifest.result_type,
             arguments,
             created_at: Datetime::default(),
             completed_at: None,
+            receipt_metadata: None,
         })
         .await
         .unwrap();
@@ -250,19 +257,22 @@ pub async fn create(
         let updated_status;
         let image_id: Option<String>;
         let receipt: Option<Vec<u8>>;
+        let receipt_metadata: Option<ReceiptMetadata>;
         let receipt_cid: Option<String>;
         let session_id = random_id;
 
         // // Proofs
         match do_prove(record_request).await {
-            Ok((image_id_data, receipt_data, _)) => {
+            Ok((image_id_data, receipt_data, _, metadata)) => {
                 updated_status = ProofSessionStatus::Completed;
                 receipt = Some(receipt_data);
                 image_id = Some(image_id_data);
+                receipt_metadata = Some(metadata);
             }
             Err(_) => {
                 updated_status = ProofSessionStatus::Failed;
                 receipt = None;
+                receipt_metadata = None;
                 image_id = None;
             }
         };
@@ -286,6 +296,7 @@ pub async fn create(
                 completed_at: Datetime::default(),
                 image_id,
                 receipt_cid,
+                receipt_metadata,
             })
             .await
             .expect("Failed to update proof session status");
@@ -296,7 +307,7 @@ pub async fn create(
 
 async fn do_prove(
     payload: ProofSessionRequest,
-) -> Result<(String, Vec<u8>, Value), Box<dyn Error>> {
+) -> Result<(String, Vec<u8>, Value, risc0_zkvm::ReceiptMetadata), Box<dyn Error>> {
     // Add WASM
     let wasm_file: Option<Vec<u8>>;
     if let Some(wasm_path) = &payload.manifest.wasm_path {
@@ -371,8 +382,10 @@ async fn do_prove(
         }
     };
 
+    let metadata: risc0_zkvm::ReceiptMetadata = receipt.get_metadata().unwrap();
+
     // Searlize the binary reciept data
     let receipt_data = bincode::serialize(&receipt).unwrap();
 
-    Ok((image_id, receipt_data, result))
+    Ok((image_id, receipt_data, result, metadata))
 }

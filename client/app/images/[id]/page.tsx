@@ -7,6 +7,9 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import WatViewer from '@/components/WatViewer'
 import CopyClipboardButton from '@/components/CopyClipboardButton'
+import { Download } from 'lucide-react'
+import Link from 'next/link'
+import GenerateProofButton from '@/components/GenerateProofButton'
 
 interface ManifestRecord {
 	wasm_path: string
@@ -39,7 +42,7 @@ async function getImageDetail(
 }
 
 async function getProofs(imageId: string): Promise<ProofRecord[]> {
-	const res = await fetch(`http://localhost:3005/api/proofs/by-image/${imageId}`)
+	const res = await fetch(`http://localhost:3005/api/proofs/by-image/${imageId}`, { cache: 'no-cache' })
 	return await res.json()
 }
 
@@ -54,16 +57,19 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 	if (!image) notFound()
 
 	const proofs = await getProofs(params.id)
+	const wasmFile = image.files.find((f) => f.Name === image.manifest.wasm_path)
 
 	return (
 		<>
 			<div className="h-full flex-1 flex-col md:flex">
 				<div className="container flex flex-1 flex-col items-start space-y-2 py-4 md:h-16">
+					<div className='mb-4'>
+						<h2 className="text-2xl mb-1">Image</h2>
+						<p className="opacity-75">{params.id}</p>
+					</div>
 					<div className="w-full flex gap-8 mb-8">
 						<div className="flex flex-1">
-							<WatViewer
-								fileUrl={`https://bafybeigvj6di42f5p37jlt2tn36ug4p4sm2hq24wbjwvolnm7uhtyelni4.ipfs.w3s.link`}
-							/>
+							{wasmFile && <WatViewer fileUrl={`https://${wasmFile.Hash}.ipfs.w3s.link`} />}
 						</div>
 						<div className="flex flex-col gap-4 w-1/4">
 							<div className="flex flex-col gap-1">
@@ -90,8 +96,16 @@ export default async function ImageDetail({ params }: { params: { id: string } }
 								<span>{image.manifest.result_type}</span>
 							</div>
 							<Separator />
-							<div>
-								<Button>Generate Proof</Button>
+							<div className="flex gap-4">
+								<GenerateProofButton
+									imageId={params.id}
+									argumentType={image.manifest.argument_type}
+								/>
+								<Link href={`https://${params.id}.ipfs.w3s.link`} target="_blank" rel="nofollow">
+									<Button variant="secondary" className="h-full">
+										<Download />
+									</Button>
+								</Link>
 							</div>
 						</div>
 					</div>
