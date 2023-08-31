@@ -5,18 +5,27 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { useEffect, useState } from 'react'
 import { CID } from 'multiformats'
+import { detectUUIDs } from '@/utils/strings'
 
 export function Search() {
 	const router = useRouter()
 	const [imageId, setImageId] = useState('')
 	const [isValid, setIsValid] = useState(false)
+	const [type, setType] = useState<'session' | 'image' | null>(null)
 
 	useEffect(() => {
-		try {
-			CID.parse(imageId)
+		if (detectUUIDs(imageId)) {
 			setIsValid(true)
-		} catch (error) {
-			setIsValid(false)
+			setType('session')
+		} else {
+			try {
+				CID.parse(imageId)
+				setIsValid(true)
+				setType('image')
+			} catch (error) {
+				setIsValid(false)
+				setType(null)
+			}
 		}
 	}, [imageId])
 
@@ -32,20 +41,20 @@ export function Search() {
 
 	function handleNavigate() {
 		if (!imageId || !isValid) return
-		router.push(`/images/${imageId}`)
+		router.push(`/${type === 'session' ? 'sessions' : 'images'}/${imageId}`)
 	}
 
 	return (
 		<div className="flex gap-4">
 			<Input
 				type="search"
-				placeholder="Search..."
-				className="md:w-[100px] lg:w-[300px]"
+				placeholder="Enter a proof session or image id ..."
+				className="md:w-[120px] lg:w-[420px] lg:h-[42px]"
 				onChange={(e) => setImageId(e.target.value)}
 				onKeyDown={handleKeyDown}
 			/>
 
-			<Button disabled={!imageId || !isValid} onClick={handleClick}>
+			<Button disabled={!imageId || !isValid} onClick={handleClick} className="lg:h-[42px]">
 				Search
 			</Button>
 		</div>
