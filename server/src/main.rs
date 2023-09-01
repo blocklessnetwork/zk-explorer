@@ -36,7 +36,6 @@ async fn main() {
     let router = Router::new()
         .route("/", get(api_handler_intro))
         .merge(web::routes_proofs::routes())
-        .merge(web::routes_image::routes())
         .fallback(api_handler_404)
         .layer(CorsLayer::permissive());
 
