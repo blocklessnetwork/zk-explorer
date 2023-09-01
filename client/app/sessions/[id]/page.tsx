@@ -44,7 +44,6 @@ async function getSessionDetail(id: string): Promise<SessionRecord | null> {
 export default async function SessionDetail({ params }: { params: { id: string } }) {
 	const session = await getSessionDetail(params.id)
 	if (!session) notFound()
-	console.log('session', session)
 
 	return (
 		<div className="h-full flex-1 flex-col md:flex">
@@ -89,6 +88,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 									<Textarea
 										style={{ minHeight: 250 }}
 										value={JSON.stringify(session.receipt_metadata)}
+										onChange={() => {}}
 									/>
 								</div>
 								<div className="flex">

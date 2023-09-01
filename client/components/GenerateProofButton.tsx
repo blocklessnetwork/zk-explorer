@@ -76,7 +76,7 @@ export default function GenerateProofButton({
 						</div>
 						<div className="grid gap-2">
 							{argumentType.map((a, i) => (
-								<div className="grid grid-cols-3 items-center gap-4">
+								<div key={i} className="grid grid-cols-3 items-center gap-4">
 									<Label>
 										Arg {i + 1} ({a.toLowerCase()})
 									</Label>

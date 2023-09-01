@@ -63,7 +63,7 @@ export function WatViewer({ fileUrl }: { fileUrl: string }) {
 	// Now you can use the library in your component
 	// Make sure to check if any global variables provided by the library are available before using them
 
-	return <Textarea value={code} />
+	return <Textarea value={code} onChange={() => {}} />
 }
 
 export default WatViewer
