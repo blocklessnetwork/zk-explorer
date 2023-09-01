@@ -66,7 +66,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 								</TableHeader>
 								<TableBody>
 									{session.arguments.map((a, i: number) => (
-										<TableRow>
+										<TableRow key={i}>
 											<TableCell>{i}</TableCell>
 											<TableCell>{a.arg_type}</TableCell>
 											<TableCell>{a.value}</TableCell>
@@ -87,8 +87,7 @@ export default async function SessionDetail({ params }: { params: { id: string }
 									<strong className="text-md">Receipt Metadata</strong>
 									<Textarea
 										style={{ minHeight: 250 }}
-										value={JSON.stringify(session.receipt_metadata)}
-										onChange={() => {}}
+										defaultValue={JSON.stringify(session.receipt_metadata)}
 									/>
 								</div>
 								<div className="flex">

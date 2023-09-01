@@ -26,8 +26,8 @@ export function WatViewer({ fileUrl }: { fileUrl: string }) {
 					})
 					.then((blob) => blob.arrayBuffer())
 					.then((buffer) => {
-						let module = wabt!.readWasm(buffer, { readDebugNames: true })
-						const result = module.toText({ foldExprs: true, inlineExport: true })
+						const mod = wabt!.readWasm(buffer, { readDebugNames: true })
+						const result = mod.toText({ foldExprs: true, inlineExport: true })
 						setCode(result)
 					})
 					.catch((error) => {
@@ -44,7 +44,7 @@ export function WatViewer({ fileUrl }: { fileUrl: string }) {
 			// Clean up the script tag if the component is unmounted
 			document.body.removeChild(script)
 		}
-	}, [])
+	}, [fileUrl])
 
 	if (!libraryLoaded) {
 		return <div className='w-full'>
@@ -63,7 +63,7 @@ export function WatViewer({ fileUrl }: { fileUrl: string }) {
 	// Now you can use the library in your component
 	// Make sure to check if any global variables provided by the library are available before using them
 
-	return <Textarea value={code} onChange={() => {}} />
+	return <Textarea defaultValue={code} />
 }
 
 export default WatViewer

@@ -11,7 +11,6 @@ import {
 	TableRow
 } from '@/components/ui/table'
 import { useRouter } from 'next/navigation'
-import { ProofRecord } from './columns'
 
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[]
@@ -26,8 +25,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 		getCoreRowModel: getCoreRowModel()
 	})
 
-	function handleRowClick(row: Row<ProofRecord>) {
-		router.push(`/sessions/${row.original.session_id}`)
+	function handleRowClick(row: Row<TData>) {
+		router.push(`/sessions/${(row.original as any).session_id}`)
 	}
 
 	return (
