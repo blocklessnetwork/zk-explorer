@@ -119,6 +119,14 @@ export default async function SessionDetail({ params }: { params: { id: string }
 									: 'N/A'}
 							</span>
 						</div>
+						<div className="flex flex-col gap-1">
+							<strong className="text-md">Duration</strong>
+							<span>
+								{session.completed_at
+									? dayjs(session.completed_at).diff(session.created_at, 'second') + 's'
+									: 'N/A'}
+							</span>
+						</div>
 						<Separator />
 						<div className="flex flex-col gap-1">
 							<strong className="text-md">Image</strong>
