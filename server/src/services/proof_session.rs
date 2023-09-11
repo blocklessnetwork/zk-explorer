@@ -97,6 +97,8 @@ struct ProofSession<'a> {
     arguments: &'a Vec<ProofSessionArgument>,
     result_type: &'a DynType,
 
+    result: Option<&'a Value>,
+
     created_at: Datetime,
     completed_at: Option<Datetime>,
 }
@@ -108,6 +110,7 @@ struct ProofSessionCompleteRecord {
     image_id: Option<String>,
     receipt_cid: Option<String>,
     receipt_metadata: Option<ReceiptMetadata>,
+    result: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,6 +123,8 @@ pub struct ProofSessionRecord {
     pub image_cid: String,
     pub receipt_cid: Option<String>,
     pub receipt_metadata: Option<ReceiptMetadata>,
+
+    pub result: Option<Value>,
 
     #[serde(default = "ProofSessionStatus::default")]
     pub status: ProofSessionStatus,
@@ -241,6 +246,7 @@ pub async fn create(
             created_at: Datetime::default(),
             completed_at: None,
             receipt_metadata: None,
+            result: None,
         })
         .await
         .unwrap();
@@ -259,22 +265,25 @@ pub async fn create(
         let image_id: Option<String>;
         let receipt: Option<Vec<u8>>;
         let receipt_metadata: Option<ReceiptMetadata>;
+        let receipt_result: Option<Value>;
         let receipt_cid: Option<String>;
         let session_id = random_id;
 
         // // Proofs
         match do_prove(record_request).await {
-            Ok((image_id_data, receipt_data, _, metadata)) => {
+            Ok((image_id_data, receipt_data, result, metadata)) => {
                 updated_status = ProofSessionStatus::Completed;
                 receipt = Some(receipt_data);
                 image_id = Some(image_id_data);
                 receipt_metadata = Some(metadata);
+                receipt_result = Some(result);
             }
             Err(_) => {
                 updated_status = ProofSessionStatus::Failed;
                 receipt = None;
                 receipt_metadata = None;
                 image_id = None;
+                receipt_result = None;
             }
         };
 
@@ -298,6 +307,7 @@ pub async fn create(
                 image_id,
                 receipt_cid,
                 receipt_metadata,
+                result: receipt_result,
             })
             .await
             .expect("Failed to update proof session status");
